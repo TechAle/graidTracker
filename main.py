@@ -2,7 +2,7 @@ import GraidManager as gm
 
 def main():
     manager = gm.graidManager()
-    manager.startChecking()
+    manager.managerMenu()
 
 
 if __name__ == '__main__':

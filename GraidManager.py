@@ -1,11 +1,43 @@
 import json
 import os
-import zlib
+import threading
 
 import requests
 
+import time
+from functools import wraps
 
+created = False
+
+
+def run_minute(interval_minutes):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            def run():
+                while not created:
+                    time.sleep(1)
+                while True:
+                    func(*args, **kwargs)
+                    for i in range(interval_minutes):
+                        if graidManager.STOP:
+                            return
+                        time.sleep(60)
+
+            thread = threading.Thread(target=run, daemon=True)
+            thread.start()
+
+        # Start the thread automatically but handle 'self' in class methods
+        def auto_start(instance, *args, **kwargs):
+            wrapper(instance, *args, **kwargs)  # Pass 'self' explicitly
+
+        return auto_start
+
+    return decorator
 class graidManager:
+
+    THREADS = []
+    STOP = False
 
     raids = {
         "grootslangSrGuilds": "Nest of the Grootslangs",
@@ -34,7 +66,8 @@ class graidManager:
 
     def __init__(self):
         self.config = self.get_config()
-        self.playerRaids = self.getPlayerRaids()
+        global created
+        self.playerRaids = None
         self.guildRaids = self.getGuildRaids()
 
     def getPlayerRaids(self) -> dict:
@@ -77,7 +110,10 @@ class graidManager:
         print(output)
         return output
 
-    def startChecking(self):
+    @run_minute(1)
+    def checking(self):
+        if self.playerRaids is None:
+            return
         newGuildRaids = self.getGuildRaids()
         # Check for differenes in guild raids
         for raid in newGuildRaids:
@@ -94,3 +130,19 @@ class graidManager:
                                 print("Player " + player + " has completed " + raid + " in guild " + guild)
                     self.playerRaids[guild] = playerRaids
         self.guildRaids = newGuildRaids
+
+    @run_minute(60 * 24)
+    def updatePlayers(self):
+        self.playerRaids = self.getPlayerRaids()
+
+    def managerMenu(self):
+        self.checking()
+        while True:
+            a = input("Press q to quit")
+            if a == "q":
+                graidManager.STOP = True
+                for thread in graidManager.THREADS:
+                    thread.join()
+                break
+            else:
+                print("Invalid input")
