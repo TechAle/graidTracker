@@ -45,17 +45,22 @@ class graidManager:
                 data = response.json()
                 players = [data["members"][rank] for rank in data["members"] if rank != "total"]
                 players = [key for kind in players for key in kind]
-                player_raids[guild] = {}
-                for player in players:
-                    player_response = requests.get(f"https://api.wynncraft.com/v3/player/{player}")
-                    if player_response.status_code == 200:
-                        player_data = player_response.json()
-                        player_raids[guild][player] = player_data["globalData"]["raids"]["list"]
-                    else:
-                        print("Error getting player data" + player)
+                player_raids[guild] = self.getPlayersRaids(players)
             else:
                 player_raids[guild] = []
         return player_raids
+
+    def getPlayersRaids(self, players) -> dict:
+        output = {}
+        for player in players:
+            player_response = requests.get(f"https://api.wynncraft.com/v3/player/{player}")
+            if player_response.status_code == 200:
+                player_data = player_response.json()
+                output[player] = player_data["globalData"]["raids"]["list"]
+            else:
+                print("Error getting player data" + player)
+        return output
+
 
     def getGuildRaids(self) -> dict:
         output = {}
@@ -71,3 +76,21 @@ class graidManager:
                 print("Error getting guild data" + raid)
         print(output)
         return output
+
+    def startChecking(self):
+        newGuildRaids = self.getGuildRaids()
+        # Check for differenes in guild raids
+        for raid in newGuildRaids:
+            for guild in newGuildRaids[raid]:
+                completedRaid = []
+                if self.guildRaids[raid][guild] < newGuildRaids[raid][guild]:
+                    completedRaid.append(raid)
+                if len(completedRaid) > 0:
+                    # Find who has completed the raid
+                    playerRaids = self.getPlayersRaids([ x for x in self.playerRaids[guild]])
+                    for raid in completedRaid:
+                        for player in playerRaids:
+                            if self.playerRaids[player][raid] < playerRaids[player][raid]:
+                                print("Player " + player + " has completed " + raid + " in guild " + guild)
+                    self.playerRaids[guild] = playerRaids
+        self.guildRaids = newGuildRaids
